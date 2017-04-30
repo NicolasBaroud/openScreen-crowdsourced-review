@@ -23,9 +23,10 @@ class openScreen
     {
         global $wpdb;
 
-        $wpdb->query("CREATE TABLE IF NOT EXISTS {$wpdb->prefix}openscreen_ads (id INT AUTO_INCREMENT PRIMARY KEY, ad_img VARCHAR(255) NOT NULL, creator INT NOT NULL, check_nudity INT, check_porn INT, check_racism INT, check_insult INT, check_competition INT, category INT, number_reviewers INT);");
+        $wpdb->query("CREATE TABLE IF NOT EXISTS {$wpdb->prefix}openscreen_ads (id INT AUTO_INCREMENT PRIMARY KEY, ad_img VARCHAR(255) NOT NULL, creator INT NOT NULL, check_nudity INT, check_porn INT, check_racism INT, check_insult INT, check_competition INT, category INT, number_reviewers INT, ad_price DOUBLE);");
         $wpdb->query("CREATE TABLE IF NOT EXISTS {$wpdb->prefix}openscreen_reviews (id INT AUTO_INCREMENT PRIMARY KEY, ad INT NOT NULL, user INT NOT NULL, to_check INT, value INT, why TEXT);");
         $wpdb->query("CREATE TABLE IF NOT EXISTS {$wpdb->prefix}openscreen_reviews_of_reviews (id INT AUTO_INCREMENT PRIMARY KEY, id_review INT NOT NULL, user INT NOT NULL, relevant INT);");
+        $wpdb->query("CREATE TABLE IF NOT EXISTS {$wpdb->prefix}openscreen_users (user_id INT PRIMARY KEY, rating INT NOT NULL, money DOUBLE NOT NULL);");
     }
 
     public static function uninstall()
@@ -35,6 +36,7 @@ class openScreen
         $wpdb->query("DROP TABLE IF EXISTS {$wpdb->prefix}openscreen_ads;");
         $wpdb->query("DROP TABLE IF EXISTS {$wpdb->prefix}openscreen_reviews;");
         $wpdb->query("DROP TABLE IF EXISTS {$wpdb->prefix}openscreen_reviews_of_reviews;");
+        $wpdb->query("DROP TABLE IF EXISTS {$wpdb->prefix}openscreen_users;");
     }
 
     public function result_ad($atts, $content)
@@ -53,37 +55,37 @@ class openScreen
          echo '<center><img src="' . esc_url( $uploads['url'] . '/' . $ads->ad_img ) . '" href="#" style="width: 250px; display: block; margin: 10px;"></center>';
 
          if($ads->check_nudity == 1){
-             $counted = $wpdb->get_var("SELECT COUNT(*) as counted FROM {$wpdb->prefix}openscreen_reviews WHERE to_check=1");
+             $counted = $wpdb->get_var("SELECT COUNT(*) as counted FROM {$wpdb->prefix}openscreen_reviews WHERE to_check=1 AND ad=".$ads->id);
              echo "Nudity check: ".$counted."/".$max_users;
              echo "<br/>";
          }
 
          if($ads->check_porn == 1){
-           $counted = $wpdb->get_var("SELECT COUNT(*) as counted FROM {$wpdb->prefix}openscreen_reviews WHERE to_check=2");
+           $counted = $wpdb->get_var("SELECT COUNT(*) as counted FROM {$wpdb->prefix}openscreen_reviews WHERE to_check=2 AND ad=".$ads->id);
            echo "Pornographic check: ".$counted."/".$max_users;
            echo "<br/>";
          }
 
          if($ads->check_racism == 1){
-           $counted = $wpdb->get_var("SELECT COUNT(*) as counted FROM {$wpdb->prefix}openscreen_reviews WHERE to_check=3");
+           $counted = $wpdb->get_var("SELECT COUNT(*) as counted FROM {$wpdb->prefix}openscreen_reviews WHERE to_check=3 AND ad=".$ads->id);
            echo "Racism check: ".$counted."/".$max_users;
            echo "<br/>";
          }
 
          if($ads->check_insult == 1){
-           $counted = $wpdb->get_var("SELECT COUNT(*) as counted FROM {$wpdb->prefix}openscreen_reviews WHERE to_check=4");
+           $counted = $wpdb->get_var("SELECT COUNT(*) as counted FROM {$wpdb->prefix}openscreen_reviews WHERE to_check=4 AND ad=".$ads->id);
            echo "Insult check: ".$counted."/".$max_users;
            echo "<br/>";
          }
 
          if($ads->check_competition == 1){
-           $counted = $wpdb->get_var("SELECT COUNT(*) as counted FROM {$wpdb->prefix}openscreen_reviews WHERE to_check=5");
+           $counted = $wpdb->get_var("SELECT COUNT(*) as counted FROM {$wpdb->prefix}openscreen_reviews WHERE to_check=5 AND ad=".$ads->id);
            echo "Competition check: ".$counted."/".$max_users;
            echo "<br/>";
          }
 
 
-         echo "</div>";
+         echo "</div><br/>";
        }
     }
 
@@ -101,6 +103,25 @@ class openScreen
               'value' => (int)$_POST["val"],
               'why' => esc_sql($_POST["explain"]))
             );
+
+
+            $counted = $wpdb->get_var("SELECT COUNT(*) as counted FROM {$wpdb->prefix}openscreen_users WHERE user_id=".get_current_user_id());
+            $money = $wpdb->get_var("SELECT ad_price FROM {$wpdb->prefix}openscreen_ads WHERE id=".(int)$_POST["ad"]);
+
+            if( $counted == 0 ){
+              $wpdb->insert(
+                "{$wpdb->prefix}openscreen_users",
+                array(
+                  'user_id' => get_current_user_id(),
+                  'rating' => 5,
+                  'money' => $money)
+                );
+            }else{
+                $wpdb->update("{$wpdb->prefix}openscreen_users",
+                  array( 'money' => $money),
+                  array('user_id'=>get_current_user_id())
+                );
+            }
 
             echo "<center>Thank you for your contribution !</center>";
 
@@ -194,10 +215,11 @@ class openScreen
                         echo "<br/>".$rand_key;
                   }
 
+                  echo '<br/>You can earn: '.$ads->ad_price.'€<br/>';
                   echo '<center><img src="' . esc_url( $uploads['url'] . '/' . $ads->ad_img ) . '" href="#" style="width: 250px; display: block; margin: 10px;"></center>';
                   echo '<input type="button" value="Yes" style="width: 60px; height: 30px; background-color: green; color: white; font-weight: bold; float: left; margin: 10px; margin-left: 50px;" onclick="javascript:location.href=\'?ad='.$ads->id.'&check='.$check.'&value=1\'" />' ;
                   echo '<input type="button" value="No" style="width: 60px; height: 30px; background-color: red; color: white; font-weight: bold; float: right; margin: 10px; margin-right: 50px;" onclick="javascript:location.href=\'?ad='.$ads->id.'&check='.$check.'&value=0\'" />' ;
-                  echo '<span style="clear: left;"></div>';
+                  echo '<span style="clear: left;"></div><br/>';
               }
 
             }
@@ -223,12 +245,14 @@ class openScreen
             		'ad_img' => $_FILES['upload-ad']['name'],
             		'creator' => get_current_user_id(),
                 'check_nudity' => (isset($_POST["check-nudity"])?"1":"0"),
-                'check_porn' => (isset($_POST["check-post"])?"1":"0"),
+                'check_porn' => (isset($_POST["check-porn"])?"1":"0"),
                 'check_racism' => (isset($_POST["check-racism"])?"1":"0"),
                 'check_insult' => (isset($_POST["check-insult"])?"1":"0"),
                 'check_competition' => (isset($_POST["check-competition"])?"1":"0"),
-                'category' => $_POST["competition-theme"],
-                'number_reviewers' => 10)
+                'category' => (int)$_POST["competition-theme"],
+                'number_reviewers' => (int)$_POST["number-user"],
+                'ad_price' => (double)$_POST["price-user"]
+                )
 
             	);
 
@@ -260,14 +284,24 @@ class openScreen
 
             echo "<label for='competition-theme'>This ad can't be displayed in :&nbsp;&nbsp;</label>";
             echo "<select id='competition-theme' name='competition-theme' />";
-            echo "<option>Restaurants</option>";
-            echo "<option>Hairdressers</option>";
-            echo "<option>Clothes retailers</option>";
-            echo "<option>IT shops</option>";
-            echo "<option>Food retailers</option>";
-            echo "<option>Universities</option>";
-            echo "<option>Airports</option>";
+            echo "<option value='1'>Restaurants</option>";
+            echo "<option value='2'>Hairdressers</option>";
+            echo "<option value='3'>Clothes retailers</option>";
+            echo "<option value='4'>IT shops</option>";
+            echo "<option value='5'>Food retailers</option>";
+            echo "<option value='6'>Universities</option>";
+            echo "<option value='7'>Airports</option>";
             echo "</select>";
+
+            echo "<label for='number-user'>Number of user to review each feature :&nbsp;&nbsp;</label>";
+            echo "<select id='number-user' name='number-user' />";
+
+            for($i=0; $i<100; $i++)  echo "<option>".$i."</option>";
+
+            echo "</select>";
+
+            echo "<label for='price-user'>Price per user :&nbsp;&nbsp;</label>";
+            echo "<input type='input' id='price-user' name='price-user' /><br/>";
 
             echo "<br/><br/><input type='submit' name='submit' value='Submit the ad' />";
             echo "</form>";
