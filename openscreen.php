@@ -42,50 +42,198 @@ class openScreen
     public function result_ad($atts, $content)
     {
        global $wpdb;
-
-       $results = $wpdb->get_results("SELECT * FROM {$wpdb->prefix}openscreen_ads WHERE creator=".get_current_user_id());
        $uploads = wp_upload_dir();
 
-       foreach ($results as $ads){
-         $to_review = false;
-         $max_users = $ads->number_reviewers;
+       if(isset($_GET["validate"])){
 
-         echo "<div style='width: 300px; border: 1px solid gray; text-align: center;clear: both; display: table; margin: auto'>";
+         $ad_id = (int)$_GET["validate"];
+         $wpdb->update("{$wpdb->prefix}openscreen_ads",
+           array( 'validated' => 1),
+           array('id'=>$ad_id)
+         );
 
-         echo '<center><img src="' . esc_url( $uploads['url'] . '/' . $ads->ad_img ) . '" href="#" style="width: 250px; display: block; margin: 10px;"></center>';
+         $results = $wpdb->get_results("SELECT * FROM {$wpdb->prefix}openscreen_reviews WHERE ad=".$ad_id);
+         foreach ($results as $reviews){
+           $rating = (double)$wpdb->get_var("SELECT rating FROM {$wpdb->prefix}openscreen_users WHERE user_id=".$reviews->user);
+           $rating = $rating + 0.5;
+           if($rating > 100) $rating=100;
 
-         if($ads->check_nudity == 1){
-             $counted = $wpdb->get_var("SELECT COUNT(*) as counted FROM {$wpdb->prefix}openscreen_reviews WHERE to_check=1 AND ad=".$ads->id);
+           $wpdb->update("{$wpdb->prefix}openscreen_users",
+             array( 'rating' => $rating),
+             array('user_id'=>$reviews->user)
+           );
+         }
+
+         echo "<center>";
+         echo "Your ad has been validated !<br/><br/>";
+         echo "<a href='?'>[Go back to previous page]</a>";
+         echo "</center>";
+
+       }elseif(isset($_GET["details"])){
+         $details = (int)$_GET["details"];
+
+         if(isset($_GET["discard"])){
+              $review_id = (int)$_GET["discard"];
+              $user = (int)$_GET["user"];
+              $rating = (double)$wpdb->get_var("SELECT rating FROM {$wpdb->prefix}openscreen_users WHERE user_id=".$user);
+              $rating = $rating - 0.5;
+              if($rating < 0) $rating=0;
+
+              $wpdb->update("{$wpdb->prefix}openscreen_users",
+                array( 'rating' => $rating),
+                array('user_id'=>$user)
+              );
+
+              $wpdb->update("{$wpdb->prefix}openscreen_reviews",
+                array( 'discarded' => 1),
+                array('id'=>$review_id)
+              );
+         }elseif(isset($_GET["undiscard"])){
+              $review_id = (int)$_GET["undiscard"];
+              $user = (int)$_GET["user"];
+              $rating = (double)$wpdb->get_var("SELECT rating FROM {$wpdb->prefix}openscreen_users WHERE user_id=".$user);
+              $rating = $rating + 0.5;
+              if($rating > 100) $rating=100;
+
+              $wpdb->update("{$wpdb->prefix}openscreen_users",
+                array( 'rating' => $rating),
+                array('user_id'=>$user)
+              );
+
+              $wpdb->update("{$wpdb->prefix}openscreen_reviews",
+                array( 'discarded' => 0),
+                array('id'=>$review_id)
+              );
+         }
+
+         $ad = $wpdb->get_row("SELECT * FROM {$wpdb->prefix}openscreen_ads WHERE creator=".get_current_user_id()." and id=".$details);
+         $max_users = $ad->number_reviewers;
+         $to_validate = true;
+
+         echo "<center>";
+         echo '<center><img src="' . esc_url( $uploads['url'] . '/' . $ad->ad_img ) . '" href="#" style="width: 250px; display: block; margin: 10px;"></center>';
+
+         if($ad->check_nudity == 1){
+             $counted = $wpdb->get_var("SELECT COUNT(*) as counted FROM {$wpdb->prefix}openscreen_reviews WHERE to_check=1 AND discarded=0 AND ad=".$ad->id);
              echo "Nudity check: ".$counted."/".$max_users;
              echo "<br/>";
+             if ($counted!=$max_users) $to_validate = false;
          }
 
-         if($ads->check_porn == 1){
-           $counted = $wpdb->get_var("SELECT COUNT(*) as counted FROM {$wpdb->prefix}openscreen_reviews WHERE to_check=2 AND ad=".$ads->id);
+         if($ad->check_porn == 1){
+           $counted = $wpdb->get_var("SELECT COUNT(*) as counted FROM {$wpdb->prefix}openscreen_reviews WHERE to_check=2 AND discarded=0 AND ad=".$ad->id);
            echo "Pornographic check: ".$counted."/".$max_users;
            echo "<br/>";
+           if ($counted!=$max_users) $to_validate = false;
          }
 
-         if($ads->check_racism == 1){
-           $counted = $wpdb->get_var("SELECT COUNT(*) as counted FROM {$wpdb->prefix}openscreen_reviews WHERE to_check=3 AND ad=".$ads->id);
+         if($ad->check_racism == 1){
+           $counted = $wpdb->get_var("SELECT COUNT(*) as counted FROM {$wpdb->prefix}openscreen_reviews WHERE to_check=3 AND discarded=0 AND ad=".$ad->id);
            echo "Racism check: ".$counted."/".$max_users;
            echo "<br/>";
+           if ($counted!=$max_users) $to_validate = false;
          }
 
-         if($ads->check_insult == 1){
-           $counted = $wpdb->get_var("SELECT COUNT(*) as counted FROM {$wpdb->prefix}openscreen_reviews WHERE to_check=4 AND ad=".$ads->id);
+         if($ad->check_insult == 1){
+           $counted = $wpdb->get_var("SELECT COUNT(*) as counted FROM {$wpdb->prefix}openscreen_reviews WHERE to_check=4 AND discarded=0 AND ad=".$ad->id);
            echo "Insult check: ".$counted."/".$max_users;
            echo "<br/>";
+           if ($counted!=$max_users) $to_validate = false;
          }
 
-         if($ads->check_competition == 1){
-           $counted = $wpdb->get_var("SELECT COUNT(*) as counted FROM {$wpdb->prefix}openscreen_reviews WHERE to_check=5 AND ad=".$ads->id);
+         if($ad->check_competition == 1){
+           $counted = $wpdb->get_var("SELECT COUNT(*) as counted FROM {$wpdb->prefix}openscreen_reviews WHERE to_check=5 AND discarded=0 AND ad=".$ad->id);
            echo "Competition check: ".$counted."/".$max_users;
            echo "<br/>";
+           if ($counted!=$max_users) $to_validate = false;
          }
 
+         $money = $wpdb->get_var("SELECT count(*) as counted FROM {$wpdb->prefix}openscreen_reviews WHERE ad=".$ad->id);
+         $money = $money*$ad->ad_price;
+         echo "Money spent on the review so far: ".$money."€<br/>";
 
-         echo "</div><br/>";
+         echo "<br/>";
+
+         echo "<table width='100%' border='1'>";
+         echo "<tr><td class='font-weight: bold;'><b>User</b></td><td class='font-weight: bold;'><b>Rating</b></td><td class='font-weight: bold;'><b>Question</b></td><td class='font-weight: bold;'><b>Answer</b></td><td class='font-weight: bold;'><b>Explaination</b></td><td class='font-weight: bold;'><b>Discarded?</b></td><td class='font-weight: bold;'><b>Bad user review?</b></td></tr>";
+
+         $results = $wpdb->get_results("SELECT * FROM {$wpdb->prefix}openscreen_reviews WHERE ad=".$ad->id);
+         foreach ($results as $reviews){
+           switch($reviews->to_check){
+             case 1: $check="Nudity?"; break;
+             case 2: $check="Pornographic?"; break;
+             case 3: $check="Racism?"; break;
+             case 4: $check="Insults?"; break;
+             case 5: $check="Competition?"; break;
+           }
+
+           $username = $wpdb->get_var("SELECT user_nicename FROM {$wpdb->prefix}users WHERE ID=".$reviews->user);
+           $rating = (double)$wpdb->get_var("SELECT rating FROM {$wpdb->prefix}openscreen_users WHERE user_id=".$reviews->user);
+
+           $color = ($reviews->discarded?"#ccc":"transparent");
+           $link_discard = ($reviews->discarded?"<a href='?details=".$ad->id."&undiscard=".$reviews->id."&user=".$reviews->user."'>[Undiscard review]</a>":"<a href='?details=".$ad->id."&discard=".$reviews->id."&user=".$reviews->user."'>[Discard review]</a>");
+
+           echo "<tr style='background-color: ".$color."'><td>".$username."</td><td>".$rating."/100</td><td>".$check."</td><td>".($reviews->value?"Yes":"No")."</td><td>".$reviews->why."</td><td>".($reviews->discarded?"Yes":"No")."</td><td>".$link_discard."</td></tr>";
+         }
+
+         echo "</table>";
+
+         echo "<br/><br/>";
+
+         if($to_validate){
+           echo "<b>You ad has been reviewed by all the required workers, do you want to validate it now?</b><br/><br/>";
+         }else{
+           echo "<b>You ad has not yet been reviewed by all the required workers, do you want to validate it anyway?</b><br/><br/>";
+         }
+
+         echo "<input type='button' value='Yes, validate!' onclick='javascript:location.href=\"?validate=".$ad->id."\"'>";
+
+         echo "<br/><br/><a href='?'>[Go back to previous page]</a>";
+         echo "</center>";
+       }else{
+         $results = $wpdb->get_results("SELECT * FROM {$wpdb->prefix}openscreen_ads WHERE creator=".get_current_user_id()." AND validated<>1");
+
+         foreach ($results as $ads){
+           $to_review = false;
+           $max_users = $ads->number_reviewers;
+
+           echo "<div style='width: 300px; border: 1px solid gray; text-align: center;clear: both; display: table; margin: auto'>";
+
+           echo '<center><img src="' . esc_url( $uploads['url'] . '/' . $ads->ad_img ) . '" href="#" style="width: 250px; display: block; margin: 10px;"></center>';
+
+           if($ads->check_nudity == 1){
+               $counted = $wpdb->get_var("SELECT COUNT(*) as counted FROM {$wpdb->prefix}openscreen_reviews WHERE to_check=1 AND discarded=0 AND ad=".$ads->id);
+               echo "Nudity check: ".$counted."/".$max_users;
+               echo "<br/>";
+           }
+
+           if($ads->check_porn == 1){
+             $counted = $wpdb->get_var("SELECT COUNT(*) as counted FROM {$wpdb->prefix}openscreen_reviews WHERE to_check=2 AND discarded=0 AND ad=".$ads->id);
+             echo "Pornographic check: ".$counted."/".$max_users;
+             echo "<br/>";
+           }
+
+           if($ads->check_racism == 1){
+             $counted = $wpdb->get_var("SELECT COUNT(*) as counted FROM {$wpdb->prefix}openscreen_reviews WHERE to_check=3 AND discarded=0 AND ad=".$ads->id);
+             echo "Racism check: ".$counted."/".$max_users;
+             echo "<br/>";
+           }
+
+           if($ads->check_insult == 1){
+             $counted = $wpdb->get_var("SELECT COUNT(*) as counted FROM {$wpdb->prefix}openscreen_reviews WHERE to_check=4 AND discarded=0 AND ad=".$ads->id);
+             echo "Insult check: ".$counted."/".$max_users;
+             echo "<br/>";
+           }
+
+           if($ads->check_competition == 1){
+             $counted = $wpdb->get_var("SELECT COUNT(*) as counted FROM {$wpdb->prefix}openscreen_reviews WHERE to_check=5 AND discarded=0 AND ad=".$ads->id);
+             echo "Competition check: ".$counted."/".$max_users;
+             echo "<br/>";
+           }
+
+           echo "<a href='?details=".$ads->id."'>[See details and validate]</a>";
+           echo "</div><br/>";
+         }
        }
     }
 
@@ -113,7 +261,7 @@ class openScreen
                 "{$wpdb->prefix}openscreen_users",
                 array(
                   'user_id' => get_current_user_id(),
-                  'rating' => 5,
+                  'rating' => 50,
                   'money' => $money)
                 );
             }else{
@@ -138,7 +286,7 @@ class openScreen
           echo "</form>";
         }else{
             // Need to add a constraint not to show an add posted by the user
-            $results = $wpdb->get_results("SELECT * FROM {$wpdb->prefix}openscreen_ads");
+            $results = $wpdb->get_results("SELECT * FROM {$wpdb->prefix}openscreen_ads WHERE validated<>1");
             $uploads = wp_upload_dir();
             $counter = 0;
 
@@ -148,41 +296,41 @@ class openScreen
               $review_array = array();
 
               if($ads->check_nudity == 1){
-                $counted = $wpdb->get_var("SELECT COUNT(*) as counted FROM {$wpdb->prefix}openscreen_reviews WHERE to_check=1 AND user=".get_current_user_id());
+                $counted = $wpdb->get_var("SELECT COUNT(*) as counted FROM {$wpdb->prefix}openscreen_reviews WHERE to_check=1 AND ad=".$ads->id." AND user=".get_current_user_id());
                 if( $counted == 0 ){
-                  $counted = $wpdb->get_var("SELECT COUNT(*) as counted FROM {$wpdb->prefix}openscreen_reviews WHERE to_check=1");
+                  $counted = $wpdb->get_var("SELECT COUNT(*) as counted FROM {$wpdb->prefix}openscreen_reviews WHERE to_check=1 AND discarded=0 AND ad=".$ads->id);
                   if( $counted < $max_users ){ $to_review = true; $review_nudity = true; $review_array[] = 1;}
                 }
               }
 
               if($ads->check_porn == 1){
-                $counted = $wpdb->get_var("SELECT COUNT(*) as counted FROM {$wpdb->prefix}openscreen_reviews WHERE to_check=2 AND user=".get_current_user_id());
+                $counted = $wpdb->get_var("SELECT COUNT(*) as counted FROM {$wpdb->prefix}openscreen_reviews WHERE to_check=2 AND ad=".$ads->id." AND user=".get_current_user_id());
                 if( $counted == 0 ){
-                  $counted = $wpdb->get_var("SELECT COUNT(*) as counted FROM {$wpdb->prefix}openscreen_reviews WHERE to_check=2");
+                  $counted = $wpdb->get_var("SELECT COUNT(*) as counted FROM {$wpdb->prefix}openscreen_reviews WHERE to_check=2 AND discarded=0 AND ad=".$ads->id);
                   if( $counted < $max_users ){ $to_review = true; $review_porn = true; $review_array[] = 2;}
                 }
               }
 
               if($ads->check_racism == 1){
-                $counted = $wpdb->get_var("SELECT COUNT(*) as counted FROM {$wpdb->prefix}openscreen_reviews WHERE to_check=3 AND user=".get_current_user_id());
+                $counted = $wpdb->get_var("SELECT COUNT(*) as counted FROM {$wpdb->prefix}openscreen_reviews WHERE to_check=3 AND ad=".$ads->id." AND user=".get_current_user_id());
                 if( $counted == 0 ){
-                  $counted = $wpdb->get_var("SELECT COUNT(*) as counted FROM {$wpdb->prefix}openscreen_reviews WHERE to_check=3");
+                  $counted = $wpdb->get_var("SELECT COUNT(*) as counted FROM {$wpdb->prefix}openscreen_reviews WHERE to_check=3 AND discarded=0 AND ad=".$ads->id);
                   if( $counted < $max_users ){ $to_review = true; $review_racism = true; $review_array[] = 3;}
                 }
               }
 
               if($ads->check_insult == 1){
-                $counted = $wpdb->get_var("SELECT COUNT(*) as counted FROM {$wpdb->prefix}openscreen_reviews WHERE to_check=4 AND user=".get_current_user_id());
+                $counted = $wpdb->get_var("SELECT COUNT(*) as counted FROM {$wpdb->prefix}openscreen_reviews WHERE to_check=4 AND ad=".$ads->id." AND user=".get_current_user_id());
                 if( $counted == 0 ){
-                  $counted = $wpdb->get_var("SELECT COUNT(*) as counted FROM {$wpdb->prefix}openscreen_reviews WHERE to_check=4");
+                  $counted = $wpdb->get_var("SELECT COUNT(*) as counted FROM {$wpdb->prefix}openscreen_reviews WHERE to_check=4 AND discarded=0 AND ad=".$ads->id);
                   if( $counted < $max_users ){ $to_review = true; $review_insult = true; $review_array[] = 4;}
                 }
               }
 
               if($ads->check_competition == 1){
-                $counted = $wpdb->get_var("SELECT COUNT(*) as counted FROM {$wpdb->prefix}openscreen_reviews WHERE to_check=5 AND user=".get_current_user_id());
+                $counted = $wpdb->get_var("SELECT COUNT(*) as counted FROM {$wpdb->prefix}openscreen_reviews WHERE to_check=5 AND ad=".$ads->id." AND user=".get_current_user_id());
                 if( $counted == 0 ){
-                  $counted = $wpdb->get_var("SELECT COUNT(*) as counted FROM {$wpdb->prefix}openscreen_reviews WHERE to_check=5");
+                  $counted = $wpdb->get_var("SELECT COUNT(*) as counted FROM {$wpdb->prefix}openscreen_reviews WHERE to_check=5 AND discarded=0 AND ad=".$ads->id);
                   if( $counted < $max_users ){ $to_review = true; $review_competition = true; $review_array[] = 5;}
                 }
               }
@@ -202,13 +350,36 @@ class openScreen
                         echo "Does this add contain pornographic content?";
                         break;
                     case 3:
-                        echo "Does this add contain nudity?";
+                        echo "Does this add contain racism?";
                         break;
                     case 4:
-                        echo "Does this add contain nudity?";
+                        echo "Does this add contain insults?";
                         break;
                     case 5:
-                        echo "Does this add contain nudity?";
+                        switch($ads->category){
+                            case 1:
+                                  $category="a restaurant";
+                                  break;
+                            case 2:
+                                  $category="a hairdresser";
+                                  break;
+                            case 3:
+                                  $category="a clothing retailer";
+                                  break;
+                            case 4:
+                                  $category="a IT shop";
+                                  break;
+                            case 5:
+                                  $category="a food retailer";
+                                  break;
+                            case 6:
+                                  $category="a university";
+                                  break;
+                            case 7:
+                                  $category="an airport";
+                                  break;
+                        }
+                        echo "Is this an ad for ".$category."?";
                         break;
                     default:
                         echo "An error has occured";
