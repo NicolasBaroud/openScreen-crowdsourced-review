@@ -17,6 +17,7 @@ class openScreen
         add_shortcode('view_ads', array($this, 'view_ads'));
         add_shortcode('post_ad', array($this, 'post_ad'));
         add_shortcode('result_ad', array($this, 'result_ad'));
+        add_shortcode('account_ad', array($this, 'account_ad'));
     }
 
     public static function install()
@@ -37,6 +38,21 @@ class openScreen
         $wpdb->query("DROP TABLE IF EXISTS {$wpdb->prefix}openscreen_reviews;");
         $wpdb->query("DROP TABLE IF EXISTS {$wpdb->prefix}openscreen_reviews_of_reviews;");
         $wpdb->query("DROP TABLE IF EXISTS {$wpdb->prefix}openscreen_users;");
+    }
+
+    public function account_ad($atts, $content)
+    {
+       global $wpdb;
+       $money = $wpdb->get_var("SELECT SUM(ad_price) as money FROM {$wpdb->prefix}openscreen_reviews,{$wpdb->prefix}openscreen_ads  WHERE user=".get_current_user_id()." AND ad=wpn0_openscreen_ads.id");
+       echo "<br/>";
+       echo "Your current account: ".$money."€<br/>";
+       $rating = $wpdb->get_var("SELECT rating FROM {$wpdb->prefix}openscreen_users WHERE user_id=".get_current_user_id());
+       echo "Your current rating: ".$rating."/100<br/>";
+       $number_ads = $wpdb->get_var("SELECT COUNT(*) as counted FROM {$wpdb->prefix}openscreen_reviews WHERE user=".get_current_user_id());
+       echo "You have reviewed: ".$number_ads." features of ad(s)<br/>";
+       $number_ads_discarded = $wpdb->get_var("SELECT COUNT(*) as counted FROM {$wpdb->prefix}openscreen_reviews WHERE discarded=1 AND user=".get_current_user_id());
+       echo "Discarded reviews: ".$number_ads_discarded." feature(s)<br/>";
+       echo "<br/><br/><br/>";
     }
 
     public function result_ad($atts, $content)
